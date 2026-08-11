@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  ownedDocuments Document[]      @relation("OwnedDocuments")
+  shares         DocumentShare[]
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
+  ownerId   String
+  owner     User     @relation("OwnedDocuments", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shares DocumentShare[]
+}
+
+enum Permission {
+  VIEW
+  EDIT
+}
+
+model DocumentShare {
+  id         String     @id @default(cuid())
+  documentId String
+  document   Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @default(EDIT)
+  createdAt  DateTime   @default(now())
+
+  @@unique([documentId, userId])
+}

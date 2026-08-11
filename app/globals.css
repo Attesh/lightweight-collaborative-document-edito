@@ -24,3 +24,105 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.doc-content {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #27272a;
+}
+
+.doc-content h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  margin: 1.2rem 0 0.6rem;
+}
+
+.doc-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 1.1rem 0 0.5rem;
+}
+
+.doc-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+}
+
+.doc-content p {
+  margin: 0.6rem 0;
+}
+
+.doc-content ul,
+.doc-content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.6rem;
+}
+
+.doc-content ul {
+  list-style: disc;
+}
+
+.doc-content ol {
+  list-style: decimal;
+}
+
+.doc-content li {
+  margin: 0.2rem 0;
+}
+
+.doc-content li p {
+  margin: 0;
+}
+
+.doc-content strong {
+  font-weight: 700;
+}
+
+.doc-content em {
+  font-style: italic;
+}
+
+.doc-content u {
+  text-decoration: underline;
+}
+
+.doc-content blockquote {
+  border-left: 3px solid #d4d4d8;
+  padding-left: 1rem;
+  color: #52525b;
+  margin: 0.6rem 0;
+}
+
+.doc-content code {
+  background: #f4f4f5;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.3rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.9em;
+}
+
+.doc-content pre {
+  background: #18181b;
+  color: #f4f4f5;
+  padding: 0.8rem 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.6rem 0;
+}
+
+.doc-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.doc-content hr {
+  border: none;
+  border-top: 1px solid #e4e4e7;
+  margin: 1.2rem 0;
+}
+
+.doc-content:focus {
+  outline: none;
+}
