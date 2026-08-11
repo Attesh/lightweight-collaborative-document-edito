@@ -37,26 +37,34 @@ Access to a document resolves to one of `OWNER | EDIT | VIEW | NONE`
 (`lib/access.ts:getDocumentAccess`) — the owner always has full access regardless of whether a
 `DocumentShare` row exists; everyone else's access comes from their share row, if any.
 
-## Why SQLite + a driver adapter instead of Postgres/Supabase
+## Why SQLite (local file + Turso), not Postgres/Supabase
 
 The assignment explicitly allows SQLite for this scope, and it removes an entire category of
-setup friction (no hosted DB to provision, no connection string to manage) for a project of this
-size. Prisma 7 changed how SQLite is wired up — the schema file no longer holds a connection URL,
-and `PrismaClient` now takes a driver `adapter` instead of inferring one from the schema. I used
-`@prisma/adapter-better-sqlite3`, which is a synchronous, natively-compiled SQLite driver with
-prebuilt binaries for common platforms (no native compilation needed on Windows dev or Render's
-Linux build image).
+setup friction (no hosted DB to provision, no connection string to manage) for local development.
+Prisma 7 changed how SQLite is wired up — the schema file no longer holds a connection URL, and
+`PrismaClient` now takes a driver `adapter` instead of inferring one from the schema.
 
-The real tradeoff is deployment, not development: SQLite is a single file, which means it only
-works cleanly on a host with a persistent, single-writer filesystem. That's fine for a demo with
-one Render instance and no autoscaling. Render's free instance type doesn't support attaching a
-persistent disk, so as deployed the SQLite file lives on the container's local filesystem —
-survives restarts, wiped on redeploy (the seed script re-runs on every start so reviewer accounts
-always come back). `render.yaml` documents how to add a real persistent disk if upgraded to a
-paid instance. None of this would survive multi-instance scaling or a platform with an ephemeral
-per-request filesystem (e.g. plain Vercel serverless functions) without moving to a networked
-SQLite service like Turso or a hosted Postgres — a one-line swap in `lib/prisma.ts` (the adapter
-is the only database-specific code) if this ever needed to grow past a single-instance demo.
+The real tradeoff is deployment, not development: a plain SQLite file only works cleanly on a
+host with a persistent, single-writer filesystem. Vercel — where this is actually deployed — has
+neither: serverless functions get an ephemeral filesystem that isn't shared across invocations,
+so a local file would silently lose writes. [`lib/dbAdapter.ts`](./lib/dbAdapter.ts) picks the
+adapter based on the `DATABASE_URL` scheme: `@prisma/adapter-better-sqlite3` (a synchronous,
+natively-compiled driver) for a local `file:` path in dev, `@prisma/adapter-libsql` for a
+`libsql://` URL in production. That production URL points at [Turso](https://turso.tech), a
+hosted, serverless-friendly database that speaks the SQLite wire protocol — so the schema and
+every Prisma query in the app are identical either way; only which adapter gets constructed
+changes.
+
+The one place this leaked into tooling: Prisma's migration engine doesn't understand the
+`libsql://` scheme (confirmed empirically — `prisma migrate deploy` fails with `P1013: the
+provided database string is invalid ... scheme is not recognized`), even though the generated
+*Client* supports Turso fine at runtime via the driver adapter. [`scripts/migrate.ts`](./scripts/migrate.ts)
+works around this by applying `migration.sql` files directly over the libSQL client when it
+detects a remote URL, with its own small `_libsql_migrations` tracking table standing in for
+Prisma's own `_prisma_migrations` (which only gets created by the CLI path that doesn't work
+here). `render.yaml` is kept as an alternative, zero-code-change deployment path for anyone who'd
+rather run this on Render's own filesystem instead of Turso — see the tradeoff noted at the top
+of that file.
 
 ## Auth: mocked on purpose
 

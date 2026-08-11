@@ -15,7 +15,10 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for design decisions and tradeoffs, and
 - **Framework:** Next.js 16 (App Router), TypeScript, React 19
 - **Editor:** TipTap (ProseMirror) — bold, italic, underline, headings (H1–H3), paragraphs,
   bulleted/numbered lists, blockquotes
-- **Database:** SQLite via Prisma 7, using the `@prisma/adapter-better-sqlite3` driver adapter
+- **Database:** SQLite via Prisma 7. Local dev uses a plain file (`@prisma/adapter-better-sqlite3`);
+  the deployed app uses [Turso](https://turso.tech) (`@prisma/adapter-libsql`), a hosted
+  SQLite-compatible database — same schema and query code either way, see
+  [`lib/dbAdapter.ts`](./lib/dbAdapter.ts)
 - **Auth:** mocked — pick one of three seeded accounts, no password. Sessions are an HMAC-signed
   httpOnly cookie (see [`lib/session.ts`](./lib/session.ts))
 - **Styling:** Tailwind CSS v4
@@ -49,15 +52,16 @@ npm run dev
 
 Open http://localhost:3000 — you'll land on the login screen. Pick any seeded account.
 
-`.env.example` is a blank template for two variables — fill in `.env` with:
+`.env.example` is a blank template for local dev, fill in `.env` with:
 
 ```
 DATABASE_URL="file:./dev.db"
 SESSION_SECRET="any-random-string-for-local-dev"
 ```
 
-`SESSION_SECRET` signs the login cookie (HMAC). The example value is fine for local dev; set a
-real random value in production (Render's Blueprint auto-generates one — see Deployment below).
+Leave `TURSO_AUTH_TOKEN` blank locally — it's only read when `DATABASE_URL` points at a
+`libsql://` Turso database (i.e. in production), not a local file. `SESSION_SECRET` signs the
+login cookie (HMAC); any string works for local dev, use a real random value in production.
 
 ### Running tests
 
@@ -122,26 +126,45 @@ npm test
 
 ## Deployment
 
-See [render.yaml](./render.yaml) for a Render Blueprint that runs on Render's **free** instance
-type. Render's free plan does not support persistent disks (that needs a paid "Starter" instance
-or higher), so by default `DATABASE_URL` points at a SQLite file on the container's local
-filesystem: it survives restarts and sleep/wake, but is wiped on every new deploy. The seed
-script re-runs on every start, so the seeded reviewer accounts always come back even after a
-redeploy — only real documents created since the last deploy would be lost. This tradeoff (and
-how to remove it by upgrading to a paid instance + disk) is documented inline in `render.yaml`
-and in [ARCHITECTURE.md](./ARCHITECTURE.md).
+**Deployed on Vercel, database on [Turso](https://turso.tech).** Vercel's serverless functions
+have no persistent or shared filesystem, so a plain SQLite file (which is what local dev uses)
+can't live there — writes from one function invocation wouldn't reliably be visible to the next.
+Turso is a hosted, serverless-friendly SQLite-compatible database (same "sqlite" Prisma provider,
+different driver adapter — see [`lib/dbAdapter.ts`](./lib/dbAdapter.ts)), so the app's data
+actually persists correctly on Vercel. This tradeoff is explained in more detail in
+[ARCHITECTURE.md](./ARCHITECTURE.md).
 
-Steps:
-1. Push this repo to GitHub.
-2. Sign up / log in at [render.com](https://render.com) (free, no card required for the free
-   plan).
-3. In the Render dashboard: "New +" → "Blueprint", connect the GitHub repo — Render reads
-   `render.yaml` automatically and shows the one `docs-editor` service it defines.
-4. Click "Deploy Blueprint". First build takes a few minutes (installs deps, generates the
-   Prisma client, builds Next.js). The start command then runs `prisma migrate deploy` and the
-   seed script before starting the server.
-5. Once live, Render gives you a URL like `https://docs-editor-xxxx.onrender.com` — drop that
-   into this README and `SUBMISSION.md`.
+One wrinkle: Prisma's migration engine (`prisma migrate deploy`) doesn't understand Turso's
+`libsql://` connection scheme — it only works against local SQLite files or classic databases.
+[`scripts/migrate.ts`](./scripts/migrate.ts) works around this: it detects the scheme and either
+delegates to `prisma migrate deploy` (local file) or applies each `migration.sql` directly over
+the libSQL client with its own small applied-migrations tracking table (Turso). `npm run build`
+calls this automatically, so it's transparent either way.
 
-Note: Render's free instances spin down after 15 minutes of inactivity and take ~30–60s to wake
-up on the next request — the first load after idling will be slow, not broken.
+### Steps to redeploy this yourself
+
+1. **Create a free Turso database** at [turso.tech](https://turso.tech) (GitHub login, no card).
+   From the database's "Connect" page, copy the **Database URL** (`libsql://...`) and generate
+   an **auth token**.
+2. **Apply the schema and seed data** once, locally, against that database:
+   ```bash
+   DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run db:migrate:deploy
+   DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run db:seed
+   ```
+3. **Push this repo to GitHub**, then import it at [vercel.com/new](https://vercel.com/new) —
+   Vercel auto-detects Next.js, no config needed.
+4. **Set three environment variables** in the Vercel project (Settings → Environment Variables):
+
+   | Key | Value |
+   | --- | --- |
+   | `DATABASE_URL` | `libsql://your-db.turso.io` (bare URL, no query params) |
+   | `TURSO_AUTH_TOKEN` | the auth token from step 1 |
+   | `SESSION_SECRET` | any long random string |
+
+5. **Deploy.** `npm run build` runs `prisma generate`, the migrate script (no-ops since the
+   schema was already applied in step 2, matching what step 2's tracking table recorded), then
+   `next build`.
+
+An alternative, code-free-change path is also included: [render.yaml](./render.yaml) deploys to
+Render with a plain SQLite file on Render's own filesystem instead of Turso — see the comment at
+the top of that file for the tradeoff (no persistent disk on Render's free tier).

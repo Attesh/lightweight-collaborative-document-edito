@@ -1,9 +1,7 @@
 import { PrismaClient } from "../app/generated/prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { createDbAdapter } from "../lib/dbAdapter";
 
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL ?? "file:./dev.db",
-});
+const adapter = createDbAdapter(process.env.DATABASE_URL ?? "file:./dev.db");
 const prisma = new PrismaClient({ adapter });
 
 const SEED_USERS = [

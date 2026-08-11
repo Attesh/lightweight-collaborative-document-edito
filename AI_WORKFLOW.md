@@ -25,6 +25,18 @@ verification, in a single continuous session. No other AI coding tool was used.
   something neither the assignment nor most existing tutorials reflect yet. AI read the actual
   error message and the installed package's `.d.ts` files to figure out the new API shape rather
   than guessing, which was faster than searching for currently-nonexistent documentation.
+- **A mid-build deployment pivot (Render → Vercel + Turso).** Deployment started on Render, but
+  the account hit a card-verification wall, so the plan switched to Vercel mid-session. That
+  exposed a real bug in the original design: Vercel has no persistent filesystem, so the SQLite
+  file approach wouldn't reliably persist writes. AI flagged this *before* deploying (not after
+  discovering broken persistence in review) and proposed swapping to Turso. It then discovered,
+  by actually running `prisma migrate deploy` against a real Turso database and reading the exact
+  error (`P1013: ... scheme is not recognized`), that Prisma's migration engine — unlike the
+  generated Client — doesn't support the `libsql://` scheme at all, despite the driver adapter
+  class's type signature suggesting it should. Rather than accept a workaround based on
+  assumption, it wrote a small standalone script that applies migrations directly over the
+  libSQL client with its own tracking table, and proved it works (and is idempotent on a second
+  run) against the live database before wiring it into the build.
 
 ## What AI-generated output I changed or rejected
 
@@ -63,6 +75,16 @@ verification, in a single continuous session. No other AI coding tool was used.
   automation surface can't drive a native OS file picker dialog. The resulting document was then
   opened in the browser to confirm the imported heading/bold/italic/list content actually renders
   correctly in the live editor — not just that the API returned 201.
+- **The Turso swap was verified against the real production database, not just the code path.**
+  After wiring in the new adapter, AI ran `npm run build` and `npm start` (the actual production
+  server, not `next dev`) with `DATABASE_URL` pointed at the live Turso instance, then drove the
+  running app through the browser: logged in, edited a document, hard-reloaded, and confirmed the
+  edit read back correctly from Turso. One of those checks caught a real issue immediately — a
+  first attempt showed the edit hadn't saved, which turned out to be a browser-automation
+  click/focus timing artifact (confirmed by retrying with a precisely targeted click and watching
+  the text appear before navigating away), not a database bug — the kind of false lead that's
+  only distinguishable from a real bug by actually re-running the check, not by re-reading the
+  code.
 - I did not accept any AI claim of "this works" without independently triggering the behavior
   (running the test, loading the page, reading the actual API response) — the verification steps
   above are what actually happened in this session, not a description of a workflow I intend to

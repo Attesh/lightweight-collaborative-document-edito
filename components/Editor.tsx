@@ -2,7 +2,6 @@
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
 import { useEffect, useState } from "react";
 import { Toolbar } from "@/components/Toolbar";
 
@@ -18,7 +17,7 @@ export function Editor({
   const [, forceRerender] = useState(0);
 
   const editor = useEditor({
-    extensions: [StarterKit, Underline],
+    extensions: [StarterKit],
     content: content as never,
     editable,
     immediatelyRender: false,

@@ -1,3 +1,9 @@
+# Alternative deployment path (SQLite on Render's own filesystem). The submitted live
+# deployment actually uses Vercel + Turso instead — see README.md "Deployment" — because
+# Vercel has no persistent/shared filesystem for a plain SQLite file to live on. This
+# config is kept because it works standalone with zero code changes if you'd rather run
+# on Render: DATABASE_URL below is a "file:" URL, which scripts/migrate.ts routes through
+# `prisma migrate deploy` same as local dev.
 services:
   - type: web
     name: docs-editor
@@ -5,7 +11,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm install && npx prisma generate && npx next build
-    startCommand: npx prisma migrate deploy && npx tsx prisma/seed.ts && npm start
+    startCommand: npx tsx scripts/migrate.ts && npx tsx prisma/seed.ts && npm start
     envVars:
       - key: DATABASE_URL
         value: file:/opt/render/project/src/data/prod.db
